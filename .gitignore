@@ -1,0 +1,69 @@
+# Virtual environment
+venv/
+.venv/
+
+# Environment variables (never commit API keys)
+.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Data — raw files are too large for git
+data/raw/
+data/processed/
+data/chromadb/
+data/warehouse.duckdb
+data/warehouse.duckdb.wal
+
+# ML artifacts
+mlruns/
+mlartifacts/
+*.pkl
+*.joblib
+*.pt
+*.pth
+faiss_index/
+
+# dbt
+features/target/
+features/logs/
+features/dbt_packages/
+
+# Airflow
+airflow/logs/
+airflow/plugins/
+airflow.cfg
+airflow.db
+standalone_admin_password.txt
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Zip files (downloaded datasets)
+*.zip
+*.gz
+*.tar
+
+# Coverage
+.coverage
+htmlcov/
