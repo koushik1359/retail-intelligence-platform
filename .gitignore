@@ -36,6 +36,7 @@ faiss_index/
 features/target/
 features/logs/
 features/dbt_packages/
+features/.user.yml
 
 # Airflow
 airflow/logs/

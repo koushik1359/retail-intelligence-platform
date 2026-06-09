@@ -1,0 +1,58 @@
+version: 2
+
+models:
+  - name: stg_m5_sales
+    description: "Cleaned and typed M5 Walmart sales data"
+    columns:
+      - name: sale_id
+        tests:
+          - not_null
+      - name: sale_date
+        tests:
+          - not_null
+      - name: unit_sales
+        tests:
+          - not_null
+      - name: store_id
+        tests:
+          - not_null
+      - name: item_id
+        tests:
+          - not_null
+
+  - name: stg_instacart_interactions
+    description: "Cleaned Instacart user-product interactions"
+    columns:
+      - name: order_id
+        tests:
+          - not_null
+      - name: user_id
+        tests:
+          - not_null
+      - name: product_id
+        tests:
+          - not_null
+
+  - name: stg_transactions
+    description: "Cleaned Online Retail II UK transactions"
+    columns:
+      - name: invoice_id
+        tests:
+          - not_null
+      - name: customer_id
+        tests:
+          - not_null
+      - name: revenue
+        tests:
+          - not_null
+
+  - name: stg_products
+    description: "Cleaned Amazon product catalog"
+    columns:
+      - name: product_id
+        tests:
+          - not_null
+          - unique
+      - name: product_name
+        tests:
+          - not_null

@@ -1,0 +1,63 @@
+version: 2
+
+sources:
+  - name: raw
+    description: "Raw layer loaded from cleaned parquet files"
+    schema: raw
+    tables:
+      - name: m5_sales
+        description: "M5 Walmart demand forecasting dataset — 46.8M rows, long format"
+        columns:
+          - name: id
+            description: "item_id + store_id identifier"
+          - name: item_id
+          - name: dept_id
+          - name: cat_id
+          - name: store_id
+          - name: state_id
+          - name: date
+          - name: unit_sales
+          - name: sell_price
+          - name: revenue
+
+      - name: instacart_interactions
+        description: "Instacart user-product interaction log — 33.8M rows"
+        columns:
+          - name: order_id
+          - name: user_id
+          - name: product_id
+          - name: product_name
+          - name: aisle
+          - name: department
+          - name: add_to_cart_order
+          - name: reordered
+          - name: order_number
+          - name: order_dow
+          - name: order_hour_of_day
+          - name: days_since_prior_order
+
+      - name: transactions
+        description: "Online Retail II UK transaction log — 713K rows"
+        columns:
+          - name: invoice
+          - name: stock_code
+          - name: description
+          - name: quantity
+          - name: invoice_date
+          - name: price
+          - name: customer_id
+          - name: country
+          - name: revenue
+
+      - name: products
+        description: "Amazon India product catalog — 551K products"
+        columns:
+          - name: product_id
+          - name: name
+          - name: main_category
+          - name: sub_category
+          - name: ratings
+          - name: no_of_ratings
+          - name: discount_price
+          - name: actual_price
+          - name: discount_pct
