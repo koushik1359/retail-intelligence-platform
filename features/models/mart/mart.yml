@@ -32,3 +32,23 @@ models:
         tests:
           - not_null
           - unique
+  - name: mart_executive_kpis
+    description: "Daily business KPIs from UK transactions — revenue, orders, basket size, WoW trends"
+    columns:
+      - name: kpi_date
+        tests:
+          - not_null
+          - unique
+      - name: total_revenue
+        tests:
+          - not_null
+
+  - name: mart_recsys_interactions
+    description: "Clean user-item interaction matrix for recommendation API serving"
+    columns:
+      - name: user_id
+        tests:
+          - not_null
+      - name: product_id
+        tests:
+          - not_null

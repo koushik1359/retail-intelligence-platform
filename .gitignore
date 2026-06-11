@@ -68,3 +68,13 @@ logs/
 # Coverage
 .coverage
 htmlcov/
+
+# Model artifacts (binary/large files)
+models/forecasting/artifacts/
+models/recommendations/artifacts/
+*.npy
+*.faiss
+*.txt.lgb
+
+# Online retail loader (one-time script)
+pipelines/load_online_retail.py
