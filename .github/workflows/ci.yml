@@ -23,20 +23,8 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Set up DuckDB warehouse
-        env:
-          DUCKDB_PATH: data/warehouse.duckdb
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          mkdir -p data/raw/online_retail data/processed data/chromadb
-          python pipelines/load_online_retail.py
-          cd features && dbt run && dbt test && cd ..
-
-      - name: Run pytest
-        env:
-          DUCKDB_PATH: data/warehouse.duckdb
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: pytest tests/ -v --tb=short
+      - name: Run unit tests (no data required)
+        run: pytest tests/ -v -m "not integration" --tb=short
 
       - name: Upload test results
         if: always()

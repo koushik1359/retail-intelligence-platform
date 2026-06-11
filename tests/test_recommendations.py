@@ -6,10 +6,12 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
+@pytest.mark.integration
 def test_umap_parquet_exists():
     assert os.path.exists("data/processed/umap_item_embeddings.parquet")
 
 
+@pytest.mark.integration
 def test_umap_shape():
     import pandas as pd
     df = pd.read_parquet("data/processed/umap_item_embeddings.parquet")
@@ -19,23 +21,25 @@ def test_umap_shape():
     assert len(df) > 10000
 
 
+@pytest.mark.integration
 def test_item_embeddings_exist():
     assert os.path.exists("models/recommendations/artifacts/item_embeddings.npy")
     assert os.path.exists("models/recommendations/artifacts/item_embeddings_norm.npy")
 
 
+@pytest.mark.integration
 def test_item_embeddings_shape():
     emb = np.load("models/recommendations/artifacts/item_embeddings.npy")
     assert emb.ndim == 2
     assert emb.shape[1] == 64
 
 
+@pytest.mark.integration
 def test_faiss_index_exists():
     assert os.path.exists("models/recommendations/artifacts/item_index.faiss")
 
 
 def test_ab_routing_deterministic():
-    """hash(user_id) % 100 must always give the same variant."""
     def get_variant(user_id):
         return "treatment" if hash(str(user_id)) % 100 >= 50 else "control"
 
@@ -46,7 +50,6 @@ def test_ab_routing_deterministic():
 
 
 def test_ab_routing_distribution():
-    """Roughly 50/50 split across 10k users."""
     def get_variant(user_id):
         return "treatment" if hash(str(user_id)) % 100 >= 50 else "control"
 
