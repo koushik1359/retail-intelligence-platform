@@ -288,9 +288,8 @@ def run_monitoring_agent():
 
     while True:
         response = client.messages.create(
-            model="claude-opus-4-8",
+            model="claude-haiku-4-5",
             max_tokens=4096,
-            thinking={"type": "adaptive"},
             tools=TOOLS,
             messages=messages,
         )

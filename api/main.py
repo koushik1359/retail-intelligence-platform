@@ -156,9 +156,8 @@ def ask(body: AskRequest):
     context = "\n\n".join(docs)
 
     response = state["claude"].messages.create(
-        model="claude-opus-4-8",
+        model="claude-haiku-4-5",
         max_tokens=1024,
-        thinking={"type": "adaptive"},
         messages=[{"role": "user", "content":
             f"You are a retail analytics assistant. Answer using only the catalog data below.\n\n"
             f"CATALOG:\n{context}\n\nQUESTION: {body.question}"

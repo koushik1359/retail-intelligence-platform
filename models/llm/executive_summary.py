@@ -70,11 +70,10 @@ def generate_weekly_summary() -> str:
     print("Fetching KPIs from DuckDB...")
     kpis = get_weekly_kpis()
 
-    print("Generating executive summary with Claude Opus 4.8...")
+    print("Generating executive summary with Claude Haiku 4.5...")
     response = client.messages.create(
-        model="claude-opus-4-8",
+        model="claude-haiku-4-5",
         max_tokens=1500,
-        thinking={"type": "adaptive"},
         messages=[{
             "role": "user",
             "content": f"""Generate a weekly retail performance summary for a VP of Merchandising.
