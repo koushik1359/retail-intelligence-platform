@@ -32,59 +32,78 @@ The Retail Intelligence Platform is a production-grade data science system that 
 ## Architecture
 
 ```mermaid
-flowchart TD
-    subgraph Sources["Data Sources"]
-        M5["M5 Forecasting\n42M rows · 3,049 items · 10 Walmart stores"]
-        IC["Instacart Market Basket\n3.4M orders · 50K products · 206K users"]
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#6366F1", "primaryTextColor": "#fff", "primaryBorderColor": "#4F46E5", "lineColor": "#94A3B8", "secondaryColor": "#F1F5F9", "tertiaryColor": "#F8FAFC"}}}%%
+
+flowchart LR
+    classDef source    fill:#FEF9C3,stroke:#CA8A04,color:#713F12,font-weight:bold
+    classDef stream    fill:#DCFCE7,stroke:#16A34A,color:#14532D,font-weight:bold
+    classDef warehouse fill:#EDE9FE,stroke:#7C3AED,color:#3B0764,font-weight:bold
+    classDef ml        fill:#DBEAFE,stroke:#2563EB,color:#1E3A8A,font-weight:bold
+    classDef llm       fill:#FCE7F3,stroke:#DB2777,color:#831843,font-weight:bold
+    classDef api       fill:#FEF3C7,stroke:#D97706,color:#78350F,font-weight:bold
+    classDef ui        fill:#F0FDF4,stroke:#15803D,color:#14532D,font-weight:bold
+
+    subgraph SRC["🗂  Data Sources"]
+        M5["M5 Forecasting\n42M rows · 10 Walmart stores"]
+        IC["Instacart\n3.4M orders · 206K users"]
     end
 
-    subgraph Streaming["Real-Time Streaming"]
-        KP["Kafka Producer\nraw.transactions"]
-        SP["Stream Processor\nenriched.transactions"]
-        KP --> SP
+    subgraph DW["🏛  Data Warehouse · DuckDB"]
+        direction TB
+        RAW["Raw Layer"] --> STG["Staging Layer"]
+        STG --> INT["Intermediate Layer"]
+        INT --> MART["Mart Layer\ndbt · 12 models · 39 tests"]
     end
 
-    subgraph Warehouse["Data Warehouse · DuckDB"]
-        RAW["main_raw\nraw ingestion"]
-        STG["main_staging\ncleaned & typed"]
-        INT["main_intermediate\njoined features"]
-        MART["main_mart\ndbt models · 12 models · 39 tests"]
-        RAW --> STG --> INT --> MART
+    subgraph KAFKA["⚡  Real-Time Streaming · Kafka"]
+        direction TB
+        PROD["Producer\nraw.transactions"] --> PROC["Processor\nenriched.transactions"]
     end
 
-    subgraph ML["ML Models"]
-        LGB["LightGBM Tweedie\nDemand Forecast\n28-day horizon"]
-        FAISS["FAISS ANN\nCollaborative Filtering\nRecommendations"]
-        CHROMA["ChromaDB\nRAG Vector Store\nMiniLM-L6-v2"]
+    subgraph ML["🤖  ML Models"]
+        direction TB
+        LGB["LightGBM Tweedie\nDemand Forecast · 28-day"]
+        FAISS["FAISS ANN\nCollaborative Filtering"]
+        CHROMA["ChromaDB\nMiniLM-L6-v2 Embeddings"]
     end
 
-    subgraph LLM["LLM Layer · Claude Haiku 4.5"]
-        AGENT["Monitoring Agent\nquery_kpis · inventory_status\nsearch_catalog · generate_alert"]
-        EXEC["Executive Summary\nWeekly KPI narrative"]
-        RAG["Catalog Q&A\nRAG-grounded answers"]
+    subgraph LLM["✨  LLM Layer · Claude Haiku 4.5"]
+        direction TB
+        AGENT["Monitoring Agent\n5 agentic tools"]
+        RAG["Catalog Q&A\nRAG pipeline"]
+        EXEC["Executive Summary\nWeekly narrative"]
     end
 
-    subgraph API["FastAPI · HuggingFace Spaces"]
-        EP["/forecast · /recommend · /ask\n/kpis · /agent/run · /ab-test\nPrometheus metrics"]
+    subgraph API["🚀  FastAPI · HuggingFace Spaces"]
+        EP["/forecast  /recommend  /ask\n/kpis  /agent/run  /ab-test"]
     end
 
-    subgraph Dashboard["Streamlit Dashboard · Community Cloud"]
+    subgraph DASH["📊  Streamlit · Community Cloud"]
+        direction TB
         P1["Executive Overview"]
         P2["Demand Forecast"]
         P3["Recommendations"]
         P4["Catalog Q&A"]
-        P5["Live Transactions"]
+        P5["Live Transactions ⚡"]
     end
 
-    M5 & IC --> Warehouse
-    SP --> Warehouse
-    M5 & IC --> Streaming
-    MART --> LGB & FAISS & CHROMA
+    SRC --> DW
+    SRC --> KAFKA
+    DW --> ML
+    ML --> LLM
     CHROMA --> RAG
-    MART --> AGENT & EXEC
-    LGB & FAISS & RAG & AGENT --> API
-    API --> P1 & P2 & P3 & P4
-    SP -.->|"local only"| P5
+    ML --> API
+    LLM --> API
+    API --> DASH
+    PROC -.->|local only| P5
+
+    class M5,IC source
+    class PROD,PROC stream
+    class RAW,STG,INT,MART warehouse
+    class LGB,FAISS,CHROMA ml
+    class AGENT,RAG,EXEC llm
+    class EP api
+    class P1,P2,P3,P4,P5 ui
 ```
 
 ---
