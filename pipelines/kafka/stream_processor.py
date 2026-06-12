@@ -14,18 +14,24 @@ consumer = KafkaConsumer(
     bootstrap_servers=[BROKER],
     value_deserializer=lambda m: json.loads(m.decode("utf-8")),
     auto_offset_reset="earliest",
-    group_id="stream-processor",
+    group_id="stream-processor-v2",
 )
 producer = KafkaProducer(
     bootstrap_servers=[BROKER],
     value_serializer=lambda v: json.dumps(v, default=str).encode("utf-8"),
 )
 
-# Load product metadata into memory for fast lookup
+# Load product metadata from Online Retail II (matching the producer's data)
 con = duckdb.connect(DUCKDB_PATH, read_only=True)
 products = con.execute("""
-    SELECT product_id, product_name, total_revenue, revenue_rank, total_units_sold
-    FROM main_mart.fct_product_performance
+    SELECT
+        product_id,
+        MAX(description) AS product_name,
+        SUM(revenue)     AS total_revenue,
+        SUM(quantity)    AS total_units_sold,
+        ROW_NUMBER() OVER (ORDER BY SUM(revenue) DESC) AS revenue_rank
+    FROM main_raw.transactions
+    GROUP BY product_id
 """).fetchdf().set_index("product_id")
 con.close()
 print(f"Loaded {len(products):,} products into lookup table.")
