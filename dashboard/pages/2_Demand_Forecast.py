@@ -8,8 +8,7 @@ from style import inject_css, sidebar_brand, page_header, section, plotly_layout
 
 st.set_page_config(page_title="Demand Forecast", layout="wide")
 inject_css()
-API = "http://localhost:8000"
-
+API = "https://koushik1359-retail-intelligence-api.hf.space"
 STORES = ["CA_1","CA_2","CA_3","CA_4","TX_1","TX_2","TX_3","WI_1","WI_2","WI_3"]
 ITEMS  = ["FOODS_3_001","FOODS_3_002","FOODS_1_001","HOBBIES_1_001",
           "HOUSEHOLD_1_001","FOODS_2_001","HOBBIES_2_001","HOUSEHOLD_2_001"]

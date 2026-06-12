@@ -38,7 +38,7 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-API = "http://localhost:8000"
+API = "https://koushik1359-retail-intelligence-api.hf.space"
 EXAMPLES = [
     "Best snacks for kids?",
     "Breakfast items under £3",

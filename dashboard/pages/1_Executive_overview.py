@@ -8,7 +8,7 @@ from style import inject_css, sidebar_brand, page_header, section, plotly_layout
 
 st.set_page_config(page_title="Executive Overview", layout="wide")
 inject_css()
-API = "http://localhost:8000"
+API = "https://koushik1359-retail-intelligence-api.hf.space"
 
 @st.cache_data(ttl=60)
 def get_kpis(days=30):

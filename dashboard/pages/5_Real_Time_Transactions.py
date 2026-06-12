@@ -22,7 +22,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-BROKER = "localhost:9092"
+BROKER = os.getenv("KAFKA_BROKER", "localhost:9092")
 
 with st.sidebar:
     sidebar_brand()

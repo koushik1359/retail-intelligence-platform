@@ -8,7 +8,7 @@ from style import inject_css, sidebar_brand, page_header, section, plotly_layout
 
 st.set_page_config(page_title="Recommendations", layout="wide")
 inject_css()
-API       = "http://localhost:8000"
+API = "https://koushik1359-retail-intelligence-api.hf.space"
 UMAP_PATH = "data/processed/umap_item_embeddings.parquet"
 
 @st.cache_data
