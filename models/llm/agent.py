@@ -1,15 +1,28 @@
-import anthropic
 import duckdb
 import json
 import os
+import re
 import chromadb
-from datetime import datetime, timedelta
+from datetime import datetime
+from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
 
 DUCKDB_PATH = os.getenv("DUCKDB_PATH", "data/warehouse.duckdb")
-client      = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+client      = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+
+# ── Input validation — prevents SQL injection ──────────────────────────────────
+
+def _safe_id(value: str) -> str:
+    if not re.match(r'^[A-Za-z0-9_\-]+$', value):
+        raise ValueError(f"Invalid identifier: {value!r}")
+    return value
+
+def _safe_date(value: str) -> str:
+    datetime.strptime(value, "%Y-%m-%d")
+    return value
 
 
 # ── Tool implementations ───────────────────────────────────────────────────────
@@ -18,16 +31,17 @@ def query_kpis(time_window: str, store_id: str = "all", category: str = "all") -
     con = duckdb.connect(DUCKDB_PATH, read_only=True)
     window_map = {"1h": 1, "4h": 1, "24h": 1, "7d": 7}
     days = window_map.get(time_window, 1)
-    store_filter    = f"AND store_id = '{store_id}'" if store_id != "all" else ""
-    category_filter = f"AND dept_id = '{category}'" if category != "all" else ""
+
+    store_filter    = f"AND store_id = '{_safe_id(store_id)}'"    if store_id != "all" else ""
+    category_filter = f"AND dept_id = '{_safe_id(category)}'"    if category != "all" else ""
 
     rows = con.execute(f"""
         SELECT
-            SUM(total_revenue)                          AS total_revenue,
-            SUM(total_units)                            AS total_units,
-            AVG(avg_price)                              AS avg_price,
-            COUNT(DISTINCT store_id)                    AS active_stores,
-            MAX(sale_date)                              AS latest_date
+            SUM(total_revenue)       AS total_revenue,
+            SUM(total_units)         AS total_units,
+            AVG(avg_price)           AS avg_price,
+            COUNT(DISTINCT store_id) AS active_stores,
+            MAX(sale_date)           AS latest_date
         FROM main_mart.fct_daily_demand
         WHERE sale_date >= (SELECT MAX(sale_date) - INTERVAL '{days} days'
                             FROM main_mart.fct_daily_demand)
@@ -54,17 +68,18 @@ def query_kpis(time_window: str, store_id: str = "all", category: str = "all") -
     con.close()
 
     return {
-        "time_window": time_window,
-        "store_id": store_id,
-        "summary": rows.to_dict(orient="records")[0] if not rows.empty else {},
-        "top_departments": top.to_dict(orient="records"),
+        "time_window":       time_window,
+        "store_id":          store_id,
+        "summary":           rows.to_dict(orient="records")[0] if not rows.empty else {},
+        "top_departments":   top.to_dict(orient="records"),
         "bottom_departments": bottom.to_dict(orient="records"),
     }
 
 
 def get_forecast_vs_actual(date: str, store_id: str = "all", top_n: int = 10) -> dict:
     con  = duckdb.connect(DUCKDB_PATH, read_only=True)
-    filt = f"AND store_id = '{store_id}'" if store_id != "all" else ""
+    date = _safe_date(date)
+    filt = f"AND store_id = '{_safe_id(store_id)}'" if store_id != "all" else ""
     rows = con.execute(f"""
         SELECT
             store_id,
@@ -77,56 +92,49 @@ def get_forecast_vs_actual(date: str, store_id: str = "all", top_n: int = 10) ->
                  THEN ABS(total_units - units_28d_avg) / units_28d_avg * 100
             END                                 AS mape_pct
         FROM main_mart.fct_daily_demand
-        WHERE sale_date = '{date}' {filt}
+        WHERE sale_date = ? {filt}
         ORDER BY mape_pct DESC NULLS LAST
-        LIMIT {top_n}
-    """).fetchdf()
+        LIMIT ?
+    """, [date, top_n]).fetchdf()
     con.close()
     if rows.empty:
         return {"date": date, "message": "No data for this date", "items": []}
     avg_mape = float(rows["mape_pct"].dropna().mean())
     return {
-        "date": date,
-        "avg_mape_pct": round(avg_mape, 2),
-        "top_deviations": rows.to_dict(orient="records"),
+        "date":            date,
+        "avg_mape_pct":    round(avg_mape, 2),
+        "top_deviations":  rows.to_dict(orient="records"),
     }
 
 
 def get_inventory_status(store_id: str, threshold_days: float = 2.0) -> dict:
     con  = duckdb.connect(DUCKDB_PATH, read_only=True)
-    filt = f"WHERE store_id = '{store_id}'" if store_id != "all" else ""
+    filt = f"WHERE store_id = '{_safe_id(store_id)}'" if store_id != "all" else ""
     rows = con.execute(f"""
         WITH latest AS (
             SELECT
-                store_id,
-                dept_id,
-                sale_date,
-                total_units,
-                units_28d_avg,
+                store_id, dept_id, sale_date, total_units, units_28d_avg,
                 CASE WHEN units_28d_avg > 0
                      THEN total_units / units_28d_avg
                 END AS days_of_stock_proxy,
                 ROW_NUMBER() OVER (
-                    PARTITION BY store_id, dept_id
-                    ORDER BY sale_date DESC
+                    PARTITION BY store_id, dept_id ORDER BY sale_date DESC
                 ) AS rn
             FROM main_mart.fct_daily_demand
             {filt}
         )
         SELECT store_id, dept_id, sale_date, total_units, units_28d_avg, days_of_stock_proxy
         FROM latest
-        WHERE rn = 1
-          AND days_of_stock_proxy < {threshold_days}
+        WHERE rn = 1 AND days_of_stock_proxy < ?
         ORDER BY days_of_stock_proxy ASC
         LIMIT 20
-    """).fetchdf()
-
+    """, [threshold_days]).fetchdf()
     con.close()
     return {
-        "store_id": store_id,
+        "store_id":       store_id,
         "threshold_days": threshold_days,
-        "at_risk_count": len(rows),
-        "at_risk_items": rows.to_dict(orient="records"),
+        "at_risk_count":  len(rows),
+        "at_risk_items":  rows.to_dict(orient="records"),
     }
 
 
@@ -147,11 +155,11 @@ def generate_alert(severity: str, title: str, message: str,
     con = duckdb.connect(DUCKDB_PATH)
     con.execute("""
         CREATE TABLE IF NOT EXISTS main_mart.agent_alerts (
-            alert_id      VARCHAR DEFAULT gen_random_uuid(),
-            created_at    TIMESTAMP DEFAULT now(),
-            severity      VARCHAR,
-            title         VARCHAR,
-            message       VARCHAR,
+            alert_id           VARCHAR DEFAULT gen_random_uuid(),
+            created_at         TIMESTAMP DEFAULT now(),
+            severity           VARCHAR,
+            title              VARCHAR,
+            message            VARCHAR,
             recommended_action VARCHAR
         )
     """)
@@ -197,71 +205,86 @@ def execute_tool(name: str, inputs: dict) -> dict:
     return {"error": f"Unknown tool: {name}"}
 
 
-# ── Tool schemas ───────────────────────────────────────────────────────────────
+# ── Tool schemas (OpenAI format) ───────────────────────────────────────────────
 
 TOOLS = [
     {
-        "name": "query_kpis",
-        "description": "Query real-time KPIs from the data warehouse. Returns revenue, units sold, avg price, and top/bottom performing departments for a given time window.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "time_window": {"type": "string", "enum": ["1h", "4h", "24h", "7d"]},
-                "store_id":    {"type": "string", "description": "Store ID or 'all'"},
-                "category":    {"type": "string", "description": "Department ID or 'all'"},
+        "type": "function",
+        "function": {
+            "name": "query_kpis",
+            "description": "Query real-time KPIs from the data warehouse. Returns revenue, units sold, avg price, and top/bottom performing departments for a given time window.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "time_window": {"type": "string", "enum": ["1h", "4h", "24h", "7d"]},
+                    "store_id":    {"type": "string", "description": "Store ID or 'all'"},
+                    "category":    {"type": "string", "description": "Department ID or 'all'"},
+                },
+                "required": ["time_window"],
             },
-            "required": ["time_window"],
         },
     },
     {
-        "name": "get_forecast_vs_actual",
-        "description": "Compare demand forecast (28-day rolling baseline) to actual sales. Returns MAPE and top deviating store-department pairs.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "date":     {"type": "string", "description": "Date in YYYY-MM-DD format"},
-                "store_id": {"type": "string"},
-                "top_n":    {"type": "integer", "default": 10},
+        "type": "function",
+        "function": {
+            "name": "get_forecast_vs_actual",
+            "description": "Compare demand forecast (28-day rolling baseline) to actual sales. Returns MAPE and top deviating store-department pairs.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date":     {"type": "string", "description": "Date in YYYY-MM-DD format"},
+                    "store_id": {"type": "string"},
+                    "top_n":    {"type": "integer"},
+                },
+                "required": ["date"],
             },
-            "required": ["date"],
         },
     },
     {
-        "name": "get_inventory_status",
-        "description": "Check current stock levels and flag departments at risk of stockout based on sales velocity vs rolling average.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "store_id":       {"type": "string"},
-                "threshold_days": {"type": "number", "description": "Flag items with < N days of stock remaining"},
+        "type": "function",
+        "function": {
+            "name": "get_inventory_status",
+            "description": "Check current stock levels and flag departments at risk of stockout based on sales velocity vs rolling average.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "store_id":       {"type": "string"},
+                    "threshold_days": {"type": "number", "description": "Flag items with < N days of stock remaining"},
+                },
+                "required": ["store_id"],
             },
-            "required": ["store_id"],
         },
     },
     {
-        "name": "search_catalog",
-        "description": "Search the product catalog using semantic similarity to find related products or substitutes.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query":     {"type": "string"},
-                "n_results": {"type": "integer", "default": 5},
+        "type": "function",
+        "function": {
+            "name": "search_catalog",
+            "description": "Search the product catalog using semantic similarity to find related products or substitutes.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query":     {"type": "string"},
+                    "n_results": {"type": "integer"},
+                },
+                "required": ["query"],
             },
-            "required": ["query"],
         },
     },
     {
-        "name": "generate_alert",
-        "description": "Post a formatted alert to the operations dashboard when an anomaly requires human attention.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "severity":           {"type": "string", "enum": ["low", "medium", "high", "critical"]},
-                "title":              {"type": "string"},
-                "message":            {"type": "string"},
-                "recommended_action": {"type": "string"},
+        "type": "function",
+        "function": {
+            "name": "generate_alert",
+            "description": "Post a formatted alert to the operations dashboard when an anomaly requires human attention.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "severity":           {"type": "string", "enum": ["low", "medium", "high", "critical"]},
+                    "title":              {"type": "string"},
+                    "message":            {"type": "string"},
+                    "recommended_action": {"type": "string"},
+                },
+                "required": ["severity", "title", "message", "recommended_action"],
             },
-            "required": ["severity", "title", "message", "recommended_action"],
         },
     },
 ]
@@ -271,53 +294,66 @@ TOOLS = [
 
 def run_monitoring_agent():
     print("Starting retail monitoring agent...")
-    messages = [{
-        "role": "user",
-        "content": (
-            "You are a retail operations AI monitoring a large retail chain. "
-            "Your job is to:\n"
-            "1. Check KPIs for the last 7 days across all stores\n"
-            "2. Check forecast accuracy for the most recent available date\n"
-            "3. Check inventory status for stores CA_1 and TX_1\n"
-            "4. If you find any anomalies or concerning trends, generate an alert\n"
-            "5. Search the catalog for any products relevant to the anomalies you find\n"
-            "6. Write a concise operations report: what you found, what actions you recommend\n\n"
-            "Use your tools to gather data. Be thorough but efficient."
-        ),
-    }]
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a retail operations AI monitoring a large retail chain. "
+                "Be thorough but efficient. Use your tools to gather data, then write a report."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                "Your job is to:\n"
+                "1. Check KPIs for the last 7 days across all stores\n"
+                "2. Check forecast accuracy for the most recent available date\n"
+                "3. Check inventory status for stores CA_1 and TX_1\n"
+                "4. If you find any anomalies or concerning trends, generate an alert\n"
+                "5. Search the catalog for any products relevant to the anomalies you find\n"
+                "6. Write a concise operations report: what you found, what actions you recommend"
+            ),
+        },
+    ]
 
     while True:
-        response = client.messages.create(
-            model="claude-haiku-4-5",
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
             max_tokens=4096,
             tools=TOOLS,
             messages=messages,
         )
 
-        print(f"\n[Agent] stop_reason={response.stop_reason}  "
-              f"blocks={[b.type for b in response.content]}")
+        choice = response.choices[0]
+        print(f"\n[Agent] finish_reason={choice.finish_reason}")
 
-        if response.stop_reason == "end_turn":
-            report = next(
-                (b.text for b in reversed(response.content) if b.type == "text"),
-                "No report generated."
-            )
-            save_report(report)
+        if choice.finish_reason == "stop":
+            save_report(choice.message.content)
             break
 
-        if response.stop_reason == "tool_use":
-            messages.append({"role": "assistant", "content": response.content})
-            tool_results = []
-            for block in response.content:
-                if block.type == "tool_use":
-                    print(f"  → calling {block.name}({json.dumps(block.input)[:120]})")
-                    result = execute_tool(block.name, block.input)
-                    tool_results.append({
-                        "type":        "tool_result",
-                        "tool_use_id": block.id,
-                        "content":     json.dumps(result, default=str),
-                    })
-            messages.append({"role": "user", "content": tool_results})
+        if choice.finish_reason == "tool_calls":
+            messages.append({
+                "role":       "assistant",
+                "content":    choice.message.content,
+                "tool_calls": [
+                    {
+                        "id":       tc.id,
+                        "type":     "function",
+                        "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                    }
+                    for tc in choice.message.tool_calls
+                ],
+            })
+
+            for tc in choice.message.tool_calls:
+                inputs = json.loads(tc.function.arguments)
+                print(f"  → calling {tc.function.name}({json.dumps(inputs)[:120]})")
+                result = execute_tool(tc.function.name, inputs)
+                messages.append({
+                    "role":         "tool",
+                    "tool_call_id": tc.id,
+                    "content":      json.dumps(result, default=str),
+                })
 
 
 if __name__ == "__main__":

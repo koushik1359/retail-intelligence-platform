@@ -1,13 +1,13 @@
-import anthropic
 import duckdb
 import json
 import os
+from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
 
 DUCKDB_PATH = os.getenv("DUCKDB_PATH", "data/warehouse.duckdb")
-client      = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+client      = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 def get_weekly_kpis() -> dict:
@@ -59,7 +59,7 @@ def get_weekly_kpis() -> dict:
     con.close()
 
     kpis = summary.to_dict(orient="records")[0] if not summary.empty else {}
-    kpis["top_products"]   = top_products.to_dict(orient="records")
+    kpis["top_products"]        = top_products.to_dict(orient="records")
     kpis["latest_agent_report"] = (
         agent_reports.iloc[0]["report"] if not agent_reports.empty else "No report yet."
     )
@@ -70,26 +70,30 @@ def generate_weekly_summary() -> str:
     print("Fetching KPIs from DuckDB...")
     kpis = get_weekly_kpis()
 
-    print("Generating executive summary with Claude Haiku 4.5...")
-    response = client.messages.create(
-        model="claude-haiku-4-5",
+    print("Generating executive summary with GPT-4o-mini...")
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
         max_tokens=1500,
-        messages=[{
-            "role": "user",
-            "content": f"""Generate a weekly retail performance summary for a VP of Merchandising.
-
-Be direct and concise. Use bullet points. Highlight anomalies. Recommend 3 specific actions.
-Format: Executive Summary header, then KPI Highlights, then Anomalies & Risks, then 3 Recommended Actions.
-
-KPI DATA:
-{json.dumps(kpis, indent=2, default=str)}"""
-        }],
+        timeout=30,
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a senior retail analyst. Be direct, concise, and data-driven.",
+            },
+            {
+                "role": "user",
+                "content": (
+                    "Generate a weekly retail performance summary for a VP of Merchandising.\n\n"
+                    "Use bullet points. Highlight anomalies. Recommend 3 specific actions.\n"
+                    "Format: Executive Summary header, KPI Highlights, Anomalies & Risks, "
+                    "3 Recommended Actions.\n\n"
+                    f"KPI DATA:\n{json.dumps(kpis, indent=2, default=str)}"
+                ),
+            },
+        ],
     )
 
-    summary = next(
-        b.text for b in reversed(response.content) if b.type == "text"
-    )
-    return summary
+    return response.choices[0].message.content
 
 
 if __name__ == "__main__":
