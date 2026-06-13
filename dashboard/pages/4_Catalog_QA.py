@@ -39,6 +39,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 API = "https://koushik1359-retail-intelligence-api.hf.space"
+HEADERS = {"X-API-Key": os.getenv("INTERNAL_API_KEY", "")}
 EXAMPLES = [
     "Best snacks for kids?",
     "Breakfast items under £3",
@@ -86,7 +87,7 @@ ask = st.button("Ask", type="primary")
 if ask and question:
     st.session_state["qa_question"] = question
     with st.spinner("Searching catalog…"):
-        r = requests.post(f"{API}/ask", json={"question": question})
+        r = requests.post(f"{API}/ask", json={"question": question}, headers=HEADERS)
     if r.status_code == 200:
         data = r.json()
         st.session_state["qa_history"].append({
